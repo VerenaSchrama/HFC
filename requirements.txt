@@ -23,3 +23,6 @@ isort==5.13.2
 boto3==1.34.34
 mixpanel==4.10.0
 fpdf
+langchain-community
+chromadb
+python-dotenv
