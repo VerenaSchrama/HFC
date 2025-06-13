@@ -4,7 +4,7 @@ import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime
 import os
-from utils import reset_session, load_llm_chain, add_to_chat_history
+from utils import reset_session, load_rag_chain, add_to_chat_history
 from auth_service import AuthService
 from profile_service import ProfileService
 from config import (
@@ -94,6 +94,16 @@ if "last_activity" not in st.session_state:
     st.session_state.last_activity = datetime.now()
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+
+# Suggested starter questions
+suggested_questions = [
+    "Give me a personal overview of foods for each of the 4 cycle phases.",
+    "Review my previous meal choices and give me feedback.",
+    "What foods are best for my current cycle phase?",
+    "Give me a 3-day breakfast plan.",
+    "Why is organic food important for my cycle?",
+    "What nutritional seeds support my phase (seed syncing)?"
+]
 
 # Initialize session state variables for personalization and chat
 if "phase" not in st.session_state:
@@ -338,17 +348,56 @@ if st.session_state.get("clear_chat_input"):
     st.session_state["chat_input"] = ""
     st.session_state["clear_chat_input"] = False
 
+if st.session_state.get("personalization_completed"):
+    st.markdown("## 💬 Suggested Questions to Get Started")
+    for i, question in enumerate(suggested_questions):
+        if st.button(question, key=f"main_suggested_q_{i}"):
+            add_to_chat_history("user", question)
+
+            if question == "Review my previous meal choices and give me feedback.":
+                response = "Please log your meals in the following format: Day + Meal ingredients."
+                add_to_chat_history("assistant", response)
+                st.rerun()
+            else:
+                try:
+                    qa_chain = load_rag_chain()
+                    enriched_question = f"""
+                    {question}
+
+                    My current cycle phase is: {st.session_state.get("phase", "not provided")}.
+                    My current goal is: {st.session_state.get("support_goal", "not provided")}.
+                    My dietary preferences are: {', '.join(st.session_state.get("dietary_preferences", [])) or "not provided"}.
+                    """
+                    response = qa_chain({"question": enriched_question})["answer"]
+                    add_to_chat_history("assistant", response)
+
+                    if i == 0:
+                        st.session_state["recommendations_response"] = response
+
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+
+# --- Use Streamlit's st.chat_input for always-visible chat input ---
 # --- Use Streamlit's st.chat_input for always-visible chat input ---
 user_question = st.chat_input("Type your question...")
 if user_question:
     try:
-        qa_chain = load_llm_chain()
-        response = qa_chain.run({
-            "phase": st.session_state.phase,
-            "goal": st.session_state.support_goal,
-            "diet": ", ".join(st.session_state.dietary_preferences),
-            "question": user_question
-        })
+        qa_chain = load_rag_chain()
+
+        # 🔁 Voeg gepersonaliseerde context toe
+        enriched_question = f"""
+        {user_question}
+
+        My current cycle phase is: {st.session_state.get("phase", "not provided")}.
+        My current goal is: {st.session_state.get("support_goal", "not provided")}.
+        My dietary preferences are: {', '.join(st.session_state.get("dietary_preferences", [])) or "not provided"}.
+        """
+
+        response = qa_chain({
+            "question": enriched_question
+        })["answer"]
+
         add_to_chat_history("user", user_question)
         add_to_chat_history("assistant", response)
         st.rerun()
@@ -394,23 +443,32 @@ st.sidebar.markdown("## 💡 Suggested Questions")
 for i, question in enumerate(suggested_questions):
     if st.sidebar.button(question, key=f"sidebar_suggested_q_{i}"):
         add_to_chat_history("user", question)
-        # Custom response for meal review question
-        if question == "Review my previousmeal choices and give me feedback.":
+
+        if question == "Review my previous meal choices and give me feedback.":
             response = "Please log your meals in the following format: Day + Meal ingredients."
             add_to_chat_history("assistant", response)
             st.rerun()
         else:
             try:
-                qa_chain = load_llm_chain()
-                response = qa_chain.run({
-                    "phase": st.session_state.phase,
-                    "goal": st.session_state.support_goal,
-                    "diet": ", ".join(st.session_state.dietary_preferences),
-                    "question": question
-                })
+                qa_chain = load_rag_chain()
+
+                enriched_question = f"""
+                {question}
+
+                My current cycle phase is: {st.session_state.get("phase", "not provided")}.
+                My current goal is: {st.session_state.get("support_goal", "not provided")}.
+                My dietary preferences are: {', '.join(st.session_state.get("dietary_preferences", [])) or "not provided"}.
+                """
+
+                response = qa_chain({
+                    "question": enriched_question
+                })["answer"]
+
                 add_to_chat_history("assistant", response)
+
                 if i == 0:
                     st.session_state["recommendations_response"] = response
+
                 st.rerun()
             except Exception as e:
                 st.error(f"Error: {str(e)}")
@@ -495,4 +553,3 @@ if st.session_state.get("recommendations_response"):
 if not st.session_state.get("personalization_completed"):
     st.info("Please complete personalization above.")
     st.stop()
-

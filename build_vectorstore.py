@@ -1,51 +1,62 @@
-import os
-import json
 from pathlib import Path
-from dotenv import load_dotenv
+import json
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 import pdfplumber
 
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-
-# === 1. Load environment ===
-load_dotenv()
-openai_key = os.getenv("OPENAI_API_KEY")
-assert openai_key, "❌ OPENAI_API_KEY not found in .env"
-
-# === 2. Load PDF and extract text ===
+# 📍 Pad naar je bronbestand (PDF)
 pdf_path = Path("data/raw_book/InFloBook.pdf")
+
+# 📤 Extract tekst uit PDF
 text = ""
 with pdfplumber.open(pdf_path) as pdf:
     for page in pdf.pages:
         text += page.extract_text() + "\n"
 
-print(f"📄 Extracted text from {len(pdf.pages)} pages.")
+# 🔪 Chunken met langchain's TextSplitter
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=100
+)
+chunks = splitter.split_text(text)
 
-# === 3. Chunk text ===
-def chunk_text(text, chunk_size=500):
-    words = text.split()
-    return [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+# ✅ Opslaan als JSON
+output_path = Path("data/processed/chunks_AlisaVita.json")
+output_path.parent.mkdir(parents=True, exist_ok=True)
 
-chunks = chunk_text(text)
-print(f"✂️ Chunked into {len(chunks)} blocks.")
-
-# === 4. Save chunks as JSON ===
-json_path = Path("data/processed/chunks_AlisaVita.json")
-json_path.parent.mkdir(parents=True, exist_ok=True)
-with open(json_path, "w", encoding="utf-8") as f:
+with open(output_path, "w", encoding="utf-8") as f:
     json.dump(chunks, f, ensure_ascii=False, indent=2)
 
-print(f"💾 Chunks saved to {json_path}")
+print(f"✅ Extracted and chunked {len(chunks)} passages to {output_path}")
 
-# === 5. Embed and store in Chroma ===
-embedding_model = OpenAIEmbeddings(openai_api_key=openai_key)
+import os
+import json
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain.schema import Document
+from dotenv import load_dotenv
+
+load_dotenv()
 persist_dir = "data/vectorstore"
 
-vectorstore = Chroma.from_texts(
-    texts=chunks,
+# 📖 Chunks laden
+with open("data/processed/chunks_AlisaVita.json", "r", encoding="utf-8") as f:
+    chunks = json.load(f)
+
+documents = [
+    Document(page_content=chunk, metadata={"source": "AlisaVita"})
+    for chunk in chunks
+]
+
+# 🔑 Embedding model
+embedding_model = OpenAIEmbeddings(openai_api_key=os.environ["OPENAI_API_KEY"])
+
+# 💾 Vectorstore bouwen en opslaan
+vectorstore = Chroma.from_documents(
+    documents=documents,
     embedding=embedding_model,
-    persist_directory=persist_dir
+    persist_directory=persist_dir,
+    collection_name="langchain"
 )
 vectorstore.persist()
 
-print(f"✅ Vectorstore created and saved to {persist_dir}")
+print(f"✅ Vectorstore created and saved to: {persist_dir}")
