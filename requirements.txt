@@ -26,4 +26,9 @@ mixpanel==4.10.0
 fpdf
 langchain-community
 chromadb
-python-dotenvlangchain-community==0.0.21
+python-dotenv
+langchain==0.2.0
+langchain-community==0.0.21
+langchain-core==0.1.53
+faiss-cpu==1.8.0
+openai==1.30.1
