@@ -343,6 +343,41 @@ if st.session_state.get("personalization_completed"):
     else:
         st.markdown('<div style="color:#888; margin:2em 0; text-align:center;">Start the conversation by asking your first question below!</div>', unsafe_allow_html=True)
 
+    st.markdown("## 💡 Suggested Questions to Get Started")
+
+    for i in range(0, len(suggested_questions), 2):
+        cols = st.columns(2)
+        for j in range(2):
+            if i + j < len(suggested_questions):
+                question = suggested_questions[i + j]
+                with cols[j]:
+                    if st.button(question, key=f"main_suggested_q_{i+j}"):
+                        add_to_chat_history("user", question)
+
+                        try:
+                            with st.spinner("💡 Generating answer..."):
+                                qa_chain = load_rag_chain()
+
+                            enriched_question = f"""
+                            {question}
+
+                            My current cycle phase is: {st.session_state.get("phase", "not provided")}.
+                            My current goal is: {st.session_state.get("support_goal", "not provided")}.
+                            My dietary preferences are: {', '.join(st.session_state.get("dietary_preferences", [])) or "not provided"}.
+                            """
+
+                            response = qa_chain({"question": enriched_question})["answer"]
+                            add_to_chat_history("assistant", response)
+
+                            # Save special response if first question (cycle overview)
+                            if i + j == 0:
+                                st.session_state["recommendations_response"] = response
+
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+
+
 # Input at the bottom, always visible after latest message
 if st.session_state.get("clear_chat_input"):
     st.session_state["chat_input"] = ""
@@ -352,7 +387,8 @@ if st.session_state.get("clear_chat_input"):
 user_question = st.chat_input("Type your question...")
 if user_question:
     try:
-        qa_chain = load_rag_chain()
+        with st.spinner("🔍 Searching your personal nutrition advice..."):
+            qa_chain = load_rag_chain()
 
         # 🔁 Voeg gepersonaliseerde context toe
         enriched_question = f"""
