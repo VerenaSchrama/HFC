@@ -26,4 +26,4 @@ mixpanel==4.10.0
 fpdf
 langchain-community
 chromadb
-python-dotenv
+python-dotenvlangchain-community==0.0.21
