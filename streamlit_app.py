@@ -363,7 +363,7 @@ if user_question:
         My dietary preferences are: {', '.join(st.session_state.get("dietary_preferences", [])) or "not provided"}.
         """
 
-        response = qa_chain({
+        response  = qa_chain({
             "question": enriched_question
         })["answer"]
 
