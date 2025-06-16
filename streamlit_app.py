@@ -348,37 +348,6 @@ if st.session_state.get("clear_chat_input"):
     st.session_state["chat_input"] = ""
     st.session_state["clear_chat_input"] = False
 
-if st.session_state.get("personalization_completed"):
-    st.markdown("## 💬 Suggested Questions to Get Started")
-    for i, question in enumerate(suggested_questions):
-        if st.button(question, key=f"main_suggested_q_{i}"):
-            add_to_chat_history("user", question)
-
-            if question == "Review my previous meal choices and give me feedback.":
-                response = "Please log your meals in the following format: Day + Meal ingredients."
-                add_to_chat_history("assistant", response)
-                st.rerun()
-            else:
-                try:
-                    qa_chain = load_rag_chain()
-                    enriched_question = f"""
-                    {question}
-
-                    My current cycle phase is: {st.session_state.get("phase", "not provided")}.
-                    My current goal is: {st.session_state.get("support_goal", "not provided")}.
-                    My dietary preferences are: {', '.join(st.session_state.get("dietary_preferences", [])) or "not provided"}.
-                    """
-                    response = qa_chain({"question": enriched_question})["answer"]
-                    add_to_chat_history("assistant", response)
-
-                    if i == 0:
-                        st.session_state["recommendations_response"] = response
-
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-
-# --- Use Streamlit's st.chat_input for always-visible chat input ---
 # --- Use Streamlit's st.chat_input for always-visible chat input ---
 user_question = st.chat_input("Type your question...")
 if user_question:

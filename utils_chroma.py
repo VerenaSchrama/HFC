@@ -1,5 +1,4 @@
-# ✅ Nieuwe setup met FAISS in plaats van Chroma
-
+# utils.py
 import os
 import streamlit as st
 from dotenv import load_dotenv
@@ -7,32 +6,31 @@ from dotenv import load_dotenv
 # LangChain imports
 from langchain_community.chat_models import ChatOpenAI
 from langchain_community.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import Chroma
 from langchain.prompts import PromptTemplate
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-import json
 
+# 🔐 Load .env if needed (fallback to env var)
 load_dotenv()
 
+# Get key from Streamlit secrets
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 
-# ✅ Nieuwe FAISS-based RAG chain
+# ✅ RAG-based model loading
 @st.cache_resource
 def load_rag_chain():
-    # Load embedding model
+    # 1. Load embedding model
     embedding_model = OpenAIEmbeddings(openai_api_key=openai_api_key)
 
-    # Load local chunks from JSON
-    with open("data/processed/chunks_AlisaVita.json", "r") as f:
-        chunks = json.load(f)
-
-    # Create FAISS vectorstore from text chunks
-    vectorstore = FAISS.from_texts(chunks, embedding_model)
-
+    # 2. Load persisted vectorstore
+    vectorstore = Chroma(
+        persist_directory="data/vectorstore",  # ✅ Correct path
+        embedding_function=embedding_model
+    )
     retriever = vectorstore.as_retriever()
 
-    # Prompt
+    # 3. Define the system prompt
     prompt_template = PromptTemplate(
         input_variables=["question", "context"],
         template="""
@@ -40,31 +38,10 @@ You are a cycle-aware nutrition assistant based on holistic and scientific insig
 
 Always answer user questions helpfully and always provide answers in a warm, empowering tone.
 
-If the user is asking about different cycle phases, use the following structure:
-
-**Menstrual Phase**
-- Key needs:
-- Recommended foods:
-
-**Follicular Phase**
-- Key needs:
-- Recommended foods:
-
-**Ovulatory Phase**
-- Key needs:
-- Recommended foods:
-
-**Luteal Phase**
-- Key needs:
-- Recommended foods:
-
-For the foods, refer to ingredients and nutrients rather than recipes or dishes.
-
-If the source materials really don't mention anything related to the question, say:
-“There are limited recommendations for your question based on science, but what science does advise is…”
+If the source materials don’t mention something, don’t say “The text does not provide…” — instead say:
+“There are no specific recommendations for your question in science, but what science does advise is…”
 
 Be concise, clear, and nurturing in your responses.
-Keep a warm and empowering tone.
 
 Answer based on the context below:
 
@@ -76,12 +53,14 @@ Question:
 """
     )
 
+    # 4. Memory to keep chat history
     memory = ConversationBufferMemory(
         memory_key="chat_history",
         return_messages=True,
         output_key="answer"
     )
 
+    # 5. Combine in a retrieval chain
     qa_chain = ConversationalRetrievalChain.from_llm(
         llm=ChatOpenAI(model="gpt-4", temperature=0, openai_api_key=openai_api_key),
         retriever=retriever,
@@ -93,7 +72,7 @@ Question:
 
     return qa_chain
 
-
+# ✅ Optional session tools
 def reset_session():
     keys_defaults = {
         "phase": None,
@@ -108,7 +87,6 @@ def reset_session():
     for key, default in keys_defaults.items():
         if key not in st.session_state:
             st.session_state[key] = default
-
 
 def add_to_chat_history(role, message):
     if st.session_state.chat_history is None:
