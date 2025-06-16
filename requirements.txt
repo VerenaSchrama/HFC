@@ -1,5 +1,5 @@
-langchain==0.1.14
-langchain-community==0.0.21
+langchain
+langchain-community
 langchain-core==0.1.53
 langchain-openai==0.0.8
 faiss-cpu==1.8.0
